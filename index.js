@@ -80,11 +80,11 @@ app.post('/api/users/:_id/exercises', async(req, res) => {
 			let saveExercise = await exercise.save();
 			
 			res.json({
-				username: saveExercise.username,
+				username: user.username,
 				description: exercise.description,
 				duration: exercise.duration,
 				date: new Date(exercise.date).toDateString(),
-				_id: saveExercise._id,
+				_id: user._id,
 			});
 	}
 	catch (err) {
@@ -94,38 +94,73 @@ app.post('/api/users/:_id/exercises', async(req, res) => {
 })
 app.get('/api/users/:_id/logs', async(req, res) => {
 	try {
-			const userId = req.params._id;
-			const from = req.query.from || new Date(0).toISOString().substring(0, 10);
-			const to =
-				req.query.to || new Date(Date.now()).toISOString().substring(0, 10);
-			const limit = parseInt(req.query.limit) || null;
+		const userId = req.params._id;
+		const fromDate = req.query.from; 
+		const toDate = req.query.to;
+		const limit = parseInt(req.query.limit) || null;
+				// Construct query based on user ID
+				const query = { userId };
 
-			const user = await User.findById(userId).exec();
+				// Add conditions for date range if provided
+				if (fromDate && toDate) {
+					query['date'] = { $gte: new Date(fromDate), $lte: new Date(toDate) };
+				} else if (fromDate) {
+					query['date'] = { $gte: new Date(fromDate) };
+				} else if (toDate) {
+					query['date'] = { $lte: new Date(toDate) };
+				}
 
-			const exercises = await Exercise.find({userId, date: { $gte: from, $lte: to }})
-			.select('description duration date')
-			.limit(limit)
-			.exec();
+		let exercises = await Exercise.find(query);
 
-			let parsedDatesLog = exercises.map((exercise) => {
-				return {
-					description: exercise.description,
-					duration: exercise.duration,
-					date: new Date(exercise.date).toDateString(),
-				};
-			});
-			res.json({
-				_id: user._id,
-				username: user.username,
-				count: parsedDatesLog.length,
-				log: parsedDatesLog,
-			});
-	}
-	catch (err) {
-		console.error(err);
-		res.status(500).json({ error: 'Internal Server Error' });
-	}
+		if(exercises && exercises.length > 0){
+			if (limit !== null) {
+				exercises = exercises.slice(0, limit);
+			}
+			const formattedUsers = {count: exercises.length, log: exercises.map(exercise => ({ description: exercise.description, duration: exercise.duration, date: new Date(exercise.date).toDateString()}))}
+			res.json(formattedUsers)
+		}else{
+			return res.status(404).json({ error: 'User not found' });
+		}
+}
+catch (err) {
+	console.error(err);
+	res.status(500).json({ error: 'Internal Server Error' });
+}
 })
+// app.get('/api/users/:_id/logs', async(req, res) => {
+// 	try {
+// 			const userId = req.params._id;
+// 			const from = req.query.from || new Date(0).toISOString().substring(0, 10);
+// 			const to =
+// 				req.query.to || new Date(Date.now()).toISOString().substring(0, 10);
+// 			const limit = parseInt(req.query.limit) || null;
+
+// 			const user = await User.findById(userId).exec();
+
+// 			const exercises = await Exercise.find({userId, date: { $gte: from, $lte: to }})
+// 			.select('description duration date')
+// 			.limit(limit)
+// 			.exec();
+
+// 			let log = exercises.map((exercise) => {
+// 				return {
+// 					description: exercise.description,
+// 					duration: exercise.duration,
+// 					date: new Date(exercise.date).toDateString(),
+// 				};
+// 			});
+// 			res.json({
+// 				_id: user._id,
+// 				username: user.username,
+// 				count: Number(log.length),
+// 				log: log,
+// 			});
+// 	}
+// 	catch (err) {
+// 		console.error(err);
+// 		res.status(500).json({ error: 'Internal Server Error' });
+// 	}
+// })
 
 const listener = app.listen(process.env.PORT || 3000, () => {
   console.log('Your app is listening on port ' + listener.address().port)
